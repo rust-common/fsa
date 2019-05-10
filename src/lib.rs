@@ -1,72 +1,45 @@
-use std::collections::HashMap;
+type ParseFn<'a, Grammar> = &'a Fn(Grammar, char) -> &'a Node<'a, Grammar>;
 
-pub trait Node : Copy {
-    fn parse(self, next: char) -> Self;
-    fn id(self) -> String;
+struct Node<'a, Grammar> {
+    consume_function: ParseFn<'a, Grammar>,
+    name: &'static str
 }
-
-struct StaticNode<'t> {
-    map: HashMap<char, &'t StaticNode<'t>>,
-    id: &'t str
-}
-
-impl<'t> Node for &'t StaticNode<'t> {
-    fn parse(self, next: char) -> Self {
-        self.map[&next]
-    }
-
-    fn id(self) -> String {
-        String::from(self.id)
-    }
-}
-
-fn parse<T>(mut node: T, s: &str) -> T where T : Node {
-    for c in s.chars() {
-        node = node.parse(c);
-    }
-    node
-}
-
-fn parse(mut: T, s: &str) -> T where T : Node {
-    for c in s.chars() {
-        node = node.parse(c);
-    }
-    node
-}
-
-
-struct LambdaNode<'t> {
-    transfer: &'t Fn(char, &'t Self) -> &'t Self,
-    id: &'t str
-}
-
-impl<'t> LambdaNode<'t> {
-    fn new(transfer: &'t Fn(char, &'t Self) -> &'t Self, id: &'t str) -> Self {
-        LambdaNode {
-            transfer: transfer,
-            id: id
+impl<'a, Grammar> Node<'a, Grammar> {
+    fn new(name: &'static str, func: ParseFn<'a, Grammar>) -> Self {
+        Node {
+            name: name,
+            consume_function: func
         }
     }
 }
 
-impl<'t> Node for &'t LambdaNode<'t> {
-    fn parse(self, next: char) -> Self {
-        (self.transfer)(next, self)
-    }
-
-    fn id(self) -> String {
-        String::from(self.id)
-    }
+struct DigitGrammar<'a> {
+    digit_node: Node<'a, &'a Self>,
+    error_node: Node<'a, &'a Self>
 }
 
-type TransferFn<'a> = Fn(char) -> &'a str;
-type TransferMap<'a> = HashMap<&'a str, &'a TransferFn<'a>>;
-
-fn parseMap<'a>(mut state: &'a str, t: TransferMap, s: &'a str) -> &'a str {
-    for c in s.chars() {
-        state = (t.get(state).unwrap())(c);
+impl<'a> DigitGrammar<'a> {
+    fn new() -> Self {
+        Self {
+            digit_node: Node::new("digit", &|grammar, c| {
+                    match c {
+                        '0' => &grammar.digit_node,
+                        '1' => &grammar.digit_node,
+                        _ => &grammar.error_node
+                    }
+                },
+            ),
+            error_node: Node::new("error", &|grammar, _| { &grammar.error_node })
+        }
     }
-    state
+
+    fn parse(&self, s: &str) -> &Node<'a, &Self> {
+        let mut result = &self.digit_node;
+        for c in s.chars() {
+            result = (result.consume_function)(self, c);
+        }
+        result
+    }
 }
 
 #[cfg(test)]
@@ -74,45 +47,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
-        let a = StaticNode { map: HashMap::new(), id: "1" };
-        let b = StaticNode { map: HashMap::new(), id: "2" };
-        let c = StaticNode { map: HashMap::new(), id: "1" };
-        assert_ne!(a.id, b.id);
-        assert_eq!(a.id, c.id);
-    }
-
-    #[test]
     fn test_parse() {
         let example = "00110110";
-        let error = LambdaNode::new(& |_, this| this, "error");
-
-        let det = |c, this| {
-            match c {
-                '0' => this,
-                '1' => this,
-                _ => &error
-            }
-        };
-
-        let binary = LambdaNode::new(&det, "binary");
-
-        let result = parse(&binary, example);
-        assert_eq!(result.id(), "binary");
+        let grammar = DigitGrammar::new();
+        let result = grammar.parse(example);
+        assert_eq!(result.name, "digit");
     }
 
     #[test]
     fn test_parse_fail() {
-        let example = "00110b110";
-        let mut transfer: TransferMap = HashMap::new();
-        transfer.insert("error", &|_| "error");
-        transfer.insert("binary", &|c| match c {
-            '0' => "binary",
-            '1' => "binary",
-            _ => "error"
-        });
-
-        let result = parseMap(&transfer, example);
-        assert_eq!(result.id(), "error");
+        let example = "00110d110";
+        let grammar = DigitGrammar::new();
+        let result = grammar.parse(example);
+        assert_eq!(result.name, "error");
     }
 }
