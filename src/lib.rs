@@ -1,3 +1,13 @@
+pub trait Grammar<'a> {
+    fn parse(&'a self, initial: &'a Node<'a, &'a Self>, s: &str) -> &'a Node<'a, &'a Self> {
+        let mut result = initial;
+        for c in s.chars() {
+            result = (result.consume_function)(self, c);
+        }
+        result
+    }
+}
+
 pub type ParseFn<'a, Grammar> = &'a Fn(Grammar, char) -> &'a Node<'a, Grammar>;
 
 pub struct Node<'a, Grammar> {
@@ -18,7 +28,9 @@ pub struct DigitGrammar<'a> {
     error_node: Node<'a, &'a Self>
 }
 
-impl<'a> Default for DigitGrammar<'a> {
+impl Grammar<'_> for DigitGrammar<'_> {}
+
+impl Default for DigitGrammar<'_> {
     fn default() -> Self {
         Self {
             digit_node: Node::new("digit", &|grammar, c| {
@@ -34,26 +46,6 @@ impl<'a> Default for DigitGrammar<'a> {
     }
 }
 
-impl<'a> DigitGrammar<'a> {
-    /// Parse a string of characters into the grammar
-    /// Example:
-    /// ```
-    /// use fsa::DigitGrammar;
-    /// 
-    /// let example = "00110110";
-    /// let grammar = DigitGrammar::new();
-    /// let result = grammar.parse(example);
-    /// assert_eq!(result.name, "digit");
-    /// ```
-    pub fn parse(&self, s: &str) -> &Node<'a, &Self> {
-        let mut result = &self.digit_node;
-        for c in s.chars() {
-            result = (result.consume_function)(self, c);
-        }
-        result
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,7 +54,7 @@ mod tests {
     fn test_parse() {
         let example = "00110110";
         let grammar: DigitGrammar = Default::default();
-        let result = grammar.parse(example);
+        let result = grammar.parse(&grammar.digit_node, example);
         assert_eq!(result.name, "digit");
     }
 
@@ -70,7 +62,7 @@ mod tests {
     fn test_parse_fail() {
         let example = "00110d110";
         let grammar: DigitGrammar = Default::default();
-        let result = grammar.parse(example);
+        let result = grammar.parse(&grammar.digit_node, example);
         assert_eq!(result.name, "error");
     }
 }
