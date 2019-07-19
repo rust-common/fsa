@@ -1,25 +1,25 @@
-type ParseFn<'a, Grammar> = &'a Fn(Grammar, char) -> &'a Node<'a, Grammar>;
+pub type ParseFn<'a, Grammar> = &'a Fn(Grammar, char) -> &'a Node<'a, Grammar>;
 
-struct Node<'a, Grammar> {
+pub struct Node<'a, Grammar> {
     consume_function: ParseFn<'a, Grammar>,
-    name: &'static str
+    pub name: &'static str
 }
 impl<'a, Grammar> Node<'a, Grammar> {
     fn new(name: &'static str, func: ParseFn<'a, Grammar>) -> Self {
         Node {
-            name: name,
+            name,
             consume_function: func
         }
     }
 }
 
-struct DigitGrammar<'a> {
+pub struct DigitGrammar<'a> {
     digit_node: Node<'a, &'a Self>,
     error_node: Node<'a, &'a Self>
 }
 
-impl<'a> DigitGrammar<'a> {
-    fn new() -> Self {
+impl<'a> Default for DigitGrammar<'a> {
+    fn default() -> Self {
         Self {
             digit_node: Node::new("digit", &|grammar, c| {
                     match c {
@@ -32,8 +32,20 @@ impl<'a> DigitGrammar<'a> {
             error_node: Node::new("error", &|grammar, _| { &grammar.error_node })
         }
     }
+}
 
-    fn parse(&self, s: &str) -> &Node<'a, &Self> {
+impl<'a> DigitGrammar<'a> {
+    /// Parse a string of characters into the grammar
+    /// Example:
+    /// ```
+    /// use fsa::DigitGrammar;
+    /// 
+    /// let example = "00110110";
+    /// let grammar = DigitGrammar::new();
+    /// let result = grammar.parse(example);
+    /// assert_eq!(result.name, "digit");
+    /// ```
+    pub fn parse(&self, s: &str) -> &Node<'a, &Self> {
         let mut result = &self.digit_node;
         for c in s.chars() {
             result = (result.consume_function)(self, c);
@@ -49,7 +61,7 @@ mod tests {
     #[test]
     fn test_parse() {
         let example = "00110110";
-        let grammar = DigitGrammar::new();
+        let grammar: DigitGrammar = Default::default();
         let result = grammar.parse(example);
         assert_eq!(result.name, "digit");
     }
@@ -57,7 +69,7 @@ mod tests {
     #[test]
     fn test_parse_fail() {
         let example = "00110d110";
-        let grammar = DigitGrammar::new();
+        let grammar: DigitGrammar = Default::default();
         let result = grammar.parse(example);
         assert_eq!(result.name, "error");
     }
